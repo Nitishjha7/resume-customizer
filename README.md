@@ -12,7 +12,7 @@ Built for the Full Stack Developer assignment (Next.js + Python + LLM).
 |----------|-----------------------------------------|
 | Frontend | Next.js 14 (App Router), TypeScript, Tailwind CSS |
 | Backend  | Python, FastAPI                         |
-| LLM      | Google Gemini (`gemini-2.0-flash`) via the official `google-genai` SDK |
+| LLM      | Google Gemini (`gemini-2.5-flash`) via the official `google-genai` SDK |
 | Parsing  | `pdfplumber` (PDF), `python-docx` (DOCX) |
 | Hosting  | Google Cloud Run (both services, containerised) |
 
@@ -29,8 +29,9 @@ Next.js frontend  ──POST /api/customize (multipart: jd + resume)──►  F
 
 The backend parses the resume to text, sends it with the JD to Gemini using a strict
 system prompt (which forbids inventing anything the resume doesn't support), and returns
-a structured JSON the frontend renders: a match-score ring, the tailored summary,
-matched-skill and missing-keyword chips, and a before/after view of the experience.
+structured JSON the frontend renders: a match score, the tailored summary, matched-skill
+and missing-keyword chips, a before/after view of the experience bullets, and the full
+tailored resume with copy / .txt / .docx download (the DOCX is built by `POST /api/export/docx`).
 
 ## Project structure
 
@@ -42,6 +43,7 @@ matched-skill and missing-keyword chips, and a before/after view of the experien
 │   │   ├── config.py           env settings
 │   │   ├── schemas.py          pydantic response models
 │   │   └── services/
+│   │       ├── exporter.py        tailored text → DOCX
 │   │       ├── resume_parser.py   PDF/DOCX → text
 │   │       └── llm.py             Gemini call + system prompt
 │   ├── requirements.txt
@@ -113,8 +115,9 @@ After the backend is live, update its `CORS_ORIGINS` to the real frontend URL.
 - The match score is the model's estimate, not a deterministic keyword overlap — good as a
   signal, not an exact metric.
 - DOCX parsing covers paragraphs and tables; very graphic-heavy layouts may lose formatting.
-- Output download is plain text to keep it dependency-free; PDF/DOCX export would be the
-  next step.
+- Download is .txt or .docx. The DOCX is simple (headings, bullets) and does not keep the
+  original resume's visual layout. No PDF export.
+- Nothing is stored: no database, no auth, no history.
 
 ## Possible next steps
 

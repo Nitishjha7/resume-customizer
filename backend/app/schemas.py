@@ -10,10 +10,15 @@ class CustomizeResult(BaseModel):
     """What the LLM gives us back, in a shape the frontend can render directly."""
 
     tailored_summary: str
+    tailored_resume: str
     matched_skills: list[str]
     missing_keywords: list[str]
     experience: list[ExperienceBullet]
     match_score: int = Field(..., ge=0, le=100)
+
+
+class ExportRequest(BaseModel):
+    text: str = Field(..., min_length=1)
 
 
 class CustomizeResponse(BaseModel):

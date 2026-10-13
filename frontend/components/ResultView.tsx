@@ -1,9 +1,12 @@
 "use client";
 
+import { useState } from "react";
+
 export type ExperienceBullet = { original: string; rewritten: string };
 
 export type CustomizeResult = {
   tailored_summary: string;
+  tailored_resume: string;
   matched_skills: string[];
   missing_keywords: string[];
   experience: ExperienceBullet[];
@@ -15,6 +18,9 @@ export type CustomizeResponse = {
   original_text: string;
   result: CustomizeResult;
 };
+
+const btn =
+  "rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-60";
 
 function ScoreRing({ score }: { score: number }) {
   const r = 34;
@@ -43,40 +49,50 @@ function ScoreRing({ score }: { score: number }) {
   );
 }
 
-function buildDownloadText(data: CustomizeResponse): string {
-  const r = data.result;
-  const lines = [
-    "TAILORED RESUME SUGGESTIONS",
-    "===========================",
-    "",
-    `Match score (original vs JD): ${r.match_score}%`,
-    "",
-    "SUMMARY",
-    r.tailored_summary,
-    "",
-    "SKILLS THAT MATCH THE JD",
-    ...r.matched_skills.map((s) => `- ${s}`),
-    "",
-    "KEYWORDS WORTH ADDING",
-    ...r.missing_keywords.map((s) => `- ${s}`),
-    "",
-    "EXPERIENCE (rewritten)",
-    ...r.experience.map((e) => `- ${e.rewritten}`),
-  ];
-  return lines.join("\n");
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+
+function saveBlob(blob: Blob, name: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 export default function ResultView({ data }: { data: CustomizeResponse }) {
   const r = data.result;
 
-  function handleDownload() {
-    const blob = new Blob([buildDownloadText(data)], { type: "text/plain" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "tailored_resume.txt";
-    a.click();
-    URL.revokeObjectURL(url);
+  const [copied, setCopied] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+
+  function downloadTxt() {
+    saveBlob(new Blob([r.tailored_resume], { type: "text/plain" }), "tailored_resume.txt");
+  }
+
+  async function downloadDocx() {
+    setExporting(true);
+    setExportError(null);
+    try {
+      const res = await fetch(`${API_URL}/api/export/docx`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: r.tailored_resume }),
+      });
+      if (!res.ok) throw new Error();
+      saveBlob(await res.blob(), "tailored_resume.docx");
+    } catch {
+      setExportError("Couldn't create the DOCX. Try the .txt download instead.");
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  async function copyResume() {
+    await navigator.clipboard.writeText(r.tailored_resume);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
   }
 
   return (
@@ -90,12 +106,6 @@ export default function ResultView({ data }: { data: CustomizeResponse }) {
             before tailoring.
           </p>
         </div>
-        <button
-          onClick={handleDownload}
-          className="ml-auto rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500"
-        >
-          Download .txt
-        </button>
       </div>
 
       <section className="rounded-xl border border-gray-800 bg-gray-900/50 p-5">
@@ -150,6 +160,27 @@ export default function ResultView({ data }: { data: CustomizeResponse }) {
             </div>
           ))}
         </div>
+      </section>
+
+      <section className="rounded-xl border border-gray-800 bg-gray-900/50 p-5">
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <h3 className="mr-auto text-sm font-semibold uppercase tracking-wide text-indigo-400">
+            Tailored resume
+          </h3>
+          <button onClick={copyResume} className={btn}>
+            {copied ? "Copied" : "Copy"}
+          </button>
+          <button onClick={downloadTxt} className={btn}>
+            Download .txt
+          </button>
+          <button onClick={downloadDocx} disabled={exporting} className={btn}>
+            {exporting ? "Preparing…" : "Download .docx"}
+          </button>
+        </div>
+        {exportError && <p className="mb-2 text-sm text-red-400">{exportError}</p>}
+        <pre className="max-h-[32rem] overflow-auto whitespace-pre-wrap rounded-lg bg-gray-950 p-4 font-sans text-sm leading-relaxed text-gray-200">
+          {r.tailored_resume}
+        </pre>
       </section>
     </div>
   );

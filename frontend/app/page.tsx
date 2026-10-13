@@ -5,6 +5,7 @@ import ResultView, { CustomizeResponse } from "@/components/ResultView";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 const ACCEPTED = [".pdf", ".docx"];
+const MAX_MB = 5;
 
 export default function Home() {
   const [jd, setJd] = useState("");
@@ -20,6 +21,11 @@ export default function Home() {
       const ext = "." + f.name.split(".").pop()?.toLowerCase();
       if (!ACCEPTED.includes(ext)) {
         setError("Please upload a PDF or DOCX file.");
+        setFile(null);
+        return;
+      }
+      if (f.size > MAX_MB * 1024 * 1024) {
+        setError(`File is too large. Max size is ${MAX_MB} MB.`);
         setFile(null);
         return;
       }
@@ -48,14 +54,19 @@ export default function Home() {
     setData(null);
     try {
       const res = await fetch(`${API_URL}/api/customize`, { method: "POST", body: form });
-      const body = await res.json();
+      const body = await res.json().catch(() => null);
       if (!res.ok) {
-        // FastAPI puts the message in `detail`
-        throw new Error(body.detail ?? "Something went wrong. Please try again.");
+        throw new Error(body?.detail ?? "Something went wrong. Please try again.");
       }
       setData(body as CustomizeResponse);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Request failed.");
+      setError(
+        err instanceof TypeError
+          ? "Can't reach the server. Check your connection and try again."
+          : err instanceof Error
+            ? err.message
+            : "Request failed."
+      );
     } finally {
       setLoading(false);
     }
@@ -66,7 +77,7 @@ export default function Home() {
       <header className="mb-8">
         <h1 className="text-3xl font-bold text-white">Resume Customizer</h1>
         <p className="mt-1 text-gray-400">
-          Paste a job description, upload your resume, and let AI tailor it to match.
+          Paste a job description, upload your resume, and and get a version tailored to the role.
         </p>
       </header>
 
@@ -93,7 +104,7 @@ export default function Home() {
           />
           {file && (
             <p className="mt-1 text-xs text-gray-500">
-              {file.name} — {(file.size / 1024).toFixed(0)} KB
+              {file.name} · {file.size > 1024 * 1024 ? `${(file.size / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(file.size / 1024))} KB`}
             </p>
           )}
         </div>

@@ -6,9 +6,8 @@ from google.genai import types
 from app.config import settings
 from app.schemas import CustomizeResult
 
-# The quality of the output is basically all in this prompt, so it's worth
-# being explicit: tell the model exactly what to return and what NOT to do
-# (the most common failure is it inventing experience the candidate doesn't have).
+# Most of the output quality comes from this prompt. The failure to guard against
+# is the model inventing experience the candidate doesn't have, so that rule is first.
 SYSTEM_PROMPT = """You are an expert technical resume editor and recruiter.
 
 You will be given a Job Description (JD) and the plain text of a candidate's resume.
@@ -17,7 +16,8 @@ Your job is to tailor the resume to the JD WITHOUT inventing anything.
 Hard rules:
 - Never add skills, tools, companies or achievements the resume does not already support.
 - You may rephrase, reorder and re-emphasise what is already there to match the JD's wording.
-- Keep every rewritten line truthful and in a natural, human first-person-neutral resume tone.
+- Keep every rewritten line truthful, in a plain resume tone (no first person, no buzzword stuffing).
+- Preserve names, dates, employers, job titles, degrees and numbers exactly as written.
 - "missing_keywords" are important terms from the JD that are genuinely absent from the
   resume. List them as suggestions for the candidate to consider adding — do not silently
   insert them into the rewritten content.
@@ -25,6 +25,7 @@ Hard rules:
 Return ONLY a JSON object with exactly this shape:
 {
   "tailored_summary": "2-3 line professional summary rewritten to align with the JD",
+  "tailored_resume": "the COMPLETE resume as plain text, ready to use: contact details first, then sections with UPPERCASE headings (SUMMARY, SKILLS, EXPERIENCE, PROJECTS, EDUCATION, ...), bullets starting with '- '. Use the tailored summary, put JD-relevant skills first and rephrase experience bullets toward the JD. Keep every section the original had.",
   "matched_skills": ["skills already in the resume that match the JD"],
   "missing_keywords": ["important JD keywords not found in the resume"],
   "experience": [
@@ -58,17 +59,16 @@ def customize_resume(jd: str, resume_text: str) -> CustomizeResult:
             contents=_build_user_prompt(jd, resume_text),
             config=types.GenerateContentConfig(
                 system_instruction=SYSTEM_PROMPT,
-                response_mime_type="application/json",  # ask for JSON directly
+                response_mime_type="application/json",
                 temperature=0.4,
             ),
         )
         raw = response.text
-    except Exception as exc:  # network / quota / safety blocks all land here
+    except Exception as exc:  # network, quota and safety blocks all end up here
         raise LLMError(f"LLM request failed: {exc}") from exc
 
     try:
         data = json.loads(raw)
         return CustomizeResult(**data)
     except (json.JSONDecodeError, TypeError, ValueError) as exc:
-        # The model returned something we couldn't trust as valid JSON.
         raise LLMError("The model returned an unexpected format. Please try again.") from exc
