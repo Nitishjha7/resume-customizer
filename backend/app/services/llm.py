@@ -8,8 +8,7 @@ from google.genai import types
 from app.config import settings
 from app.schemas import CustomizeResult
 
-# Most of the output quality comes from this prompt. The failure to guard against
-# is the model inventing experience the candidate doesn't have, so that rule is first.
+# The main thing to guard against is the model inventing experience, hence the hard rules.
 SYSTEM_PROMPT = """You are an expert technical resume editor and recruiter.
 
 You will be given a Job Description (JD) and the plain text of a candidate's resume.
@@ -21,8 +20,7 @@ Hard rules:
 - Keep every rewritten line truthful, in a plain resume tone (no first person, no buzzword stuffing).
 - Preserve names, dates, employers, job titles, degrees and numbers exactly as written.
 - "missing_keywords" are important terms from the JD that are genuinely absent from the
-  resume. List them as suggestions for the candidate to consider adding — do not silently
-  insert them into the rewritten content.
+  resume. List them as suggestions only; do not insert them into the rewritten content.
 
 Return ONLY a JSON object with exactly this shape:
 {
@@ -52,7 +50,7 @@ RETRYABLE_CODES = {429, 500, 503}
 
 
 class LLMError(Exception):
-    """Wraps any failure talking to the LLM so the route can return a clean message."""
+    """Any failure talking to the LLM, with a message that is safe to show the user."""
 
 
 def customize_resume(jd: str, resume_text: str) -> CustomizeResult:
@@ -61,7 +59,6 @@ def customize_resume(jd: str, resume_text: str) -> CustomizeResult:
 
     client = genai.Client(api_key=settings.gemini_api_key)
 
-    raw = None
     for attempt in range(1, MAX_ATTEMPTS + 1):
         try:
             response = client.models.generate_content(
@@ -73,7 +70,6 @@ def customize_resume(jd: str, resume_text: str) -> CustomizeResult:
                     temperature=0.4,
                 ),
             )
-            raw = response.text
             break
         except Exception as exc:  # network, quota and safety blocks all end up here
             code = getattr(exc, "code", None)
@@ -86,7 +82,6 @@ def customize_resume(jd: str, resume_text: str) -> CustomizeResult:
             ) from exc
 
     try:
-        data = json.loads(raw)
-        return CustomizeResult(**data)
+        return CustomizeResult(**json.loads(response.text))
     except (json.JSONDecodeError, TypeError, ValueError) as exc:
         raise LLMError("The model returned an unexpected format. Please try again.") from exc

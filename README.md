@@ -1,134 +1,113 @@
 # Resume Customizer
 
-A web app that takes a job description and a resume, and uses an LLM to tailor the
-resume to the JD — rewriting the summary, highlighting the skills that match,
-suggesting keywords worth adding, and re-angling the experience bullets.
+Paste a job description, upload your resume (PDF or DOCX), and get a version tailored to that
+role: a rewritten summary, the skills that already match, keywords you are missing, reworded
+experience bullets and a match score. The full tailored resume can be copied or downloaded as
+.txt or .docx.
 
-Built for the Full Stack Developer assignment (Next.js + Python + LLM).
+## Stack
 
-## Tech stack
-
-| Layer    | Choice                                  |
-|----------|-----------------------------------------|
-| Frontend | Next.js 14 (App Router), TypeScript, Tailwind CSS |
-| Backend  | Python, FastAPI                         |
-| LLM      | Google Gemini (`gemini-3.8-flash`) via the official `google-genai` SDK |
-| Parsing  | `pdfplumber` (PDF), `python-docx` (DOCX) |
-| Hosting  | Google Cloud Run (both services, containerised) |
+- Frontend: Next.js 14 (App Router), TypeScript, Tailwind CSS
+- Backend: Python, FastAPI
+- LLM: Google Gemini, `gemini-3.8-flash` by default (set `GEMINI_MODEL` to change), called through the `google-genai` SDK
+- Parsing: pdfplumber for PDF, python-docx for DOCX
+- Hosting: Docker images on Google Cloud Run
 
 ## How it works
 
 ```
-Next.js frontend  ──POST /api/customize (multipart: jd + resume)──►  FastAPI backend
-      ▲                                                                   │
-      │                                                   parse PDF/DOCX → plain text
-      │                                                                   │
-      └──────────────── JSON (summary, skills, keywords, ◄── Gemini (system prompt +
-                        experience, match score)              JD + resume) returns JSON
+browser (Next.js)
+   |  POST /api/customize   multipart: jd + resume file
+   v
+FastAPI
+   1. validate the JD and the file (type, size)
+   2. extract text from the PDF/DOCX
+   3. send JD + resume text to Gemini and ask for JSON back
+   4. validate that JSON with pydantic and return it
+   ^
+browser renders it; "Download .docx" calls POST /api/export/docx
 ```
 
-The backend parses the resume to text, sends it with the JD to Gemini using a strict
-system prompt (which forbids inventing anything the resume doesn't support), and returns
-structured JSON the frontend renders: a match score, the tailored summary, matched-skill
-and missing-keyword chips, a before/after view of the experience bullets, and the full
-tailored resume with copy / .txt / .docx download (the DOCX is built by `POST /api/export/docx`).
+The system prompt tells the model not to invent skills, employers or numbers, and to list
+missing JD keywords as suggestions instead of writing them into the resume. Transient Gemini
+errors (429/500/503) are retried up to 3 times.
 
-## Project structure
+## Layout
 
 ```
-.
-├── backend/            FastAPI service
-│   ├── app/
-│   │   ├── main.py             routes + validation
-│   │   ├── config.py           env settings
-│   │   ├── schemas.py          pydantic response models
-│   │   └── services/
-│   │       ├── exporter.py        tailored text → DOCX
-│   │       ├── resume_parser.py   PDF/DOCX → text
-│   │       └── llm.py             Gemini call + system prompt
-│   ├── requirements.txt
-│   ├── Dockerfile
-│   └── .env.example
-└── frontend/           Next.js app
-    ├── app/
-    │   ├── page.tsx            the form + flow
-    │   └── layout.tsx
-    ├── components/ResultView.tsx
-    ├── Dockerfile
-    └── .env.example
+backend/
+  app/main.py                  routes and validation
+  app/config.py               settings from env
+  app/schemas.py              response models
+  app/services/resume_parser.py  PDF/DOCX to text
+  app/services/llm.py          prompt and Gemini call
+  app/services/exporter.py     text to DOCX
+  tests/                       pytest
+frontend/
+  app/page.tsx                 form and request
+  components/ResultView.tsx    results and downloads
+  lib/api.ts                   API base URL
 ```
 
-## Running locally
+## Run locally
 
-### 1. Backend
+Backend:
 
 ```bash
 cd backend
-python -m venv venv && source venv/bin/activate   # Windows: venv\Scripts\activate
+python -m venv venv
+venv\Scripts\activate            # source venv/bin/activate on Mac/Linux
 pip install -r requirements.txt
-cp .env.example .env            # then paste your Gemini key into .env
+cp .env.example .env             # put your Gemini key in .env
 uvicorn app.main:app --reload --port 8000
 ```
 
-Get a free Gemini key from Google AI Studio: https://aistudio.google.com/app/apikey
-API docs will be at http://localhost:8000/docs
+A free key is available at https://aistudio.google.com/app/apikey
 
-### 2. Frontend
+Frontend:
 
 ```bash
 cd frontend
 npm install
-cp .env.example .env.local      # NEXT_PUBLIC_API_URL=http://localhost:8000
+cp .env.example .env.local
 npm run dev
 ```
 
-Open http://localhost:3000
+Open http://localhost:3000.
 
-### Or with Docker
+With Docker instead:
 
 ```bash
-cp backend/.env.example backend/.env    # add your Gemini key
+cp backend/.env.example backend/.env
 docker compose up --build
 ```
 
-Frontend on http://localhost:3000, backend on http://localhost:8000.
+Tests: `pip install -r requirements-dev.txt && pytest` inside `backend/`.
 
-## Deploying (Google Cloud Run)
-
-Both services ship with a Dockerfile.
+## Deploy (Cloud Run)
 
 ```bash
-# Backend
 cd backend
-gcloud run deploy resume-api \
-  --source . --region asia-south1 --allow-unauthenticated \
+gcloud run deploy resume-api --source . --region asia-south1 --allow-unauthenticated \
   --set-env-vars GEMINI_API_KEY=YOUR_KEY,CORS_ORIGINS=https://YOUR_FRONTEND_URL
 
-# Frontend (pass the deployed backend URL at build time)
 cd ../frontend
-gcloud run deploy resume-web \
-  --source . --region asia-south1 --allow-unauthenticated \
+gcloud run deploy resume-web --source . --region asia-south1 --allow-unauthenticated \
   --set-build-env-vars NEXT_PUBLIC_API_URL=https://YOUR_BACKEND_URL
 ```
 
-After the backend is live, update its `CORS_ORIGINS` to the real frontend URL.
+The frontend URL is only known after the second command, so set `CORS_ORIGINS` on the backend
+again afterwards (`gcloud run services update resume-api --update-env-vars CORS_ORIGINS=...`).
 
 ## Error handling
 
-- Invalid file type, oversized file (>5 MB) and too-short JD → `422` with a readable message
-- Scanned/image-only PDFs (no extractable text) → clear "upload a text-based resume" error
-- LLM/network failures → `502` with a friendly message; the UI shows it inline
+- Wrong file type, file over 5 MB, JD under 50 or over 15,000 characters: 422 with a readable message
+- Scanned PDF with no text layer: asks for a text-based resume
+- Gemini down or returning bad JSON: 502, shown inline in the UI
 
-## Known limitations / trade-offs
+## Limitations
 
-- The match score is the model's estimate, not a deterministic keyword overlap — good as a
-  signal, not an exact metric.
-- DOCX parsing covers paragraphs and tables; very graphic-heavy layouts may lose formatting.
-- Download is .txt or .docx. The DOCX is simple (headings, bullets) and does not keep the
-  original resume's visual layout. No PDF export.
-- Nothing is stored: no database, no auth, no history.
-
-## Possible next steps
-
-Diff view of every changed line, section-wise toggles, a cover-letter generator, and
-streaming the LLM output token by token.
+- The match score is the model's estimate, not a keyword count. Treat it as a rough signal.
+- The DOCX export is plain (headings and bullets) and does not keep the original layout. No PDF export.
+- Nothing is stored. No login, no history.
+- A cold start on Cloud Run adds a few seconds to the first request.

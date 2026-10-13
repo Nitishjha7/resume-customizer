@@ -27,11 +27,11 @@ def health():
 
 
 @app.post("/api/customize", response_model=CustomizeResponse)
-async def customize(jd: str = Form(...), resume: UploadFile = File(...)):
-    if not jd or len(jd.strip()) < MIN_JD_LENGTH:
+def customize(jd: str = Form(...), resume: UploadFile = File(...)):
+    if len(jd.strip()) < MIN_JD_LENGTH:
         raise HTTPException(
             status_code=422,
-            detail=f"Job description looks too short — paste at least {MIN_JD_LENGTH} characters.",
+            detail=f"Job description looks too short. Paste at least {MIN_JD_LENGTH} characters.",
         )
 
     if len(jd) > MAX_JD_LENGTH:
@@ -45,12 +45,12 @@ async def customize(jd: str = Form(...), resume: UploadFile = File(...)):
             detail="Unsupported file type. Please upload a PDF or DOCX.",
         )
 
-    data = await resume.read()
-    size_mb = len(data) / (1024 * 1024)
-    if size_mb > settings.max_file_size_mb:
+    max_bytes = settings.max_file_size_mb * 1024 * 1024
+    data = resume.file.read(max_bytes + 1)
+    if len(data) > max_bytes:
         raise HTTPException(
             status_code=422,
-            detail=f"File is too large ({size_mb:.1f} MB). Max allowed is {settings.max_file_size_mb} MB.",
+            detail=f"File is too large. Max allowed is {settings.max_file_size_mb} MB.",
         )
 
     try:
@@ -63,11 +63,7 @@ async def customize(jd: str = Form(...), resume: UploadFile = File(...)):
     except LLMError as exc:
         raise HTTPException(status_code=502, detail=str(exc))
 
-    return CustomizeResponse(
-        filename=filename,
-        original_text=resume_text,
-        result=result,
-    )
+    return CustomizeResponse(filename=filename, result=result)
 
 
 @app.post("/api/export/docx")

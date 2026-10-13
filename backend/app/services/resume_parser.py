@@ -6,7 +6,7 @@ from docx import Document
 
 
 class ResumeParseError(Exception):
-    """Raised when we can't pull any usable text out of the uploaded file."""
+    """The uploaded file has no usable text."""
 
 
 def _extract_pdf(data: bytes) -> str:
@@ -21,7 +21,7 @@ def _extract_pdf(data: bytes) -> str:
 
 def _extract_docx(data: bytes) -> str:
     doc = Document(io.BytesIO(data))
-    # Paragraphs cover most resumes; tables catch the ones laid out in a grid.
+    # some resumes are laid out as tables, so read those too
     lines = [p.text for p in doc.paragraphs if p.text.strip()]
     for table in doc.tables:
         for row in table.rows:
@@ -32,7 +32,6 @@ def _extract_docx(data: bytes) -> str:
 
 
 def extract_text(filename: str, data: bytes) -> str:
-    """Return the plain text of a resume uploaded as PDF or DOCX."""
     ext = os.path.splitext(filename)[1].lower()
 
     if ext == ".pdf":
@@ -43,8 +42,7 @@ def extract_text(filename: str, data: bytes) -> str:
         raise ResumeParseError(f"Unsupported file type: {ext}")
 
     text = text.strip()
-    # A scanned/image-only PDF parses to almost nothing — tell the user instead
-    # of sending an empty resume to the LLM.
+    # scanned PDFs come out nearly empty
     if len(text) < 30:
         raise ResumeParseError(
             "Couldn't read any text from this file. If it's a scanned PDF, "

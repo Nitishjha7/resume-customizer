@@ -2,11 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --bg: #0b1120;
-}
-
 body {
-  background: var(--bg);
+  background: #0b1120;
   color: #e5e7eb;
 }

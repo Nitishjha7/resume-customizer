@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { API_URL } from "@/lib/api";
 
 export type ExperienceBullet = { original: string; rewritten: string };
 
@@ -15,7 +16,6 @@ export type CustomizeResult = {
 
 export type CustomizeResponse = {
   filename: string;
-  original_text: string;
   result: CustomizeResult;
 };
 
@@ -48,8 +48,6 @@ function ScoreRing({ score }: { score: number }) {
     </svg>
   );
 }
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 function saveBlob(blob: Blob, name: string) {
   const url = URL.createObjectURL(blob);
@@ -135,7 +133,7 @@ export default function ResultView({ data }: { data: CustomizeResponse }) {
           </h3>
           <div className="flex flex-wrap gap-2">
             {r.missing_keywords.length === 0 && (
-              <span className="text-sm text-gray-500">Nothing major missing — nice.</span>
+              <span className="text-sm text-gray-500">Nothing major missing.</span>
             )}
             {r.missing_keywords.map((s) => (
               <span key={s} className="rounded-full bg-amber-500/10 px-3 py-1 text-sm text-amber-300">

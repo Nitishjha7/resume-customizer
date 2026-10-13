@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { API_URL } from "@/lib/api";
 import ResultView, { CustomizeResponse } from "@/components/ResultView";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 const ACCEPTED = [".pdf", ".docx"];
 const MAX_MB = 5;
 
@@ -83,8 +83,11 @@ export default function Home() {
 
       <form onSubmit={onSubmit} className="space-y-5">
         <div>
-          <label className="mb-2 block text-sm font-medium text-gray-300">Job description</label>
+          <label htmlFor="jd" className="mb-2 block text-sm font-medium text-gray-300">
+            Job description
+          </label>
           <textarea
+            id="jd"
             value={jd}
             onChange={(e) => setJd(e.target.value)}
             rows={8}
@@ -95,8 +98,11 @@ export default function Home() {
         </div>
 
         <div>
-          <label className="mb-2 block text-sm font-medium text-gray-300">Resume (PDF or DOCX)</label>
+          <label htmlFor="resume" className="mb-2 block text-sm font-medium text-gray-300">
+            Resume (PDF or DOCX)
+          </label>
           <input
+            id="resume"
             type="file"
             accept=".pdf,.docx"
             onChange={onFileChange}
