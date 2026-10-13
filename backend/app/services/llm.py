@@ -1,4 +1,5 @@
 import json
+import logging
 
 from google import genai
 from google.genai import types
@@ -43,6 +44,9 @@ def _build_user_prompt(jd: str, resume_text: str) -> str:
     )
 
 
+logger = logging.getLogger(__name__)
+
+
 class LLMError(Exception):
     """Wraps any failure talking to the LLM so the route can return a clean message."""
 
@@ -65,7 +69,8 @@ def customize_resume(jd: str, resume_text: str) -> CustomizeResult:
         )
         raw = response.text
     except Exception as exc:  # network, quota and safety blocks all end up here
-        raise LLMError(f"LLM request failed: {exc}") from exc
+        logger.exception("Gemini request failed")
+        raise LLMError("The AI service is unavailable right now. Please try again in a moment.") from exc
 
     try:
         data = json.loads(raw)
