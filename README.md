@@ -84,6 +84,15 @@ npm run dev
 
 Open http://localhost:3000
 
+### Or with Docker
+
+```bash
+cp backend/.env.example backend/.env    # add your Gemini key
+docker compose up --build
+```
+
+Frontend on http://localhost:3000, backend on http://localhost:8000.
+
 ## Deploying (Google Cloud Run)
 
 Both services ship with a Dockerfile.
