@@ -1,5 +1,6 @@
 import json
 import logging
+import time
 
 from google import genai
 from google.genai import types
@@ -46,6 +47,9 @@ def _build_user_prompt(jd: str, resume_text: str) -> str:
 
 logger = logging.getLogger(__name__)
 
+MAX_ATTEMPTS = 3
+RETRYABLE_CODES = {429, 500, 503}
+
 
 class LLMError(Exception):
     """Wraps any failure talking to the LLM so the route can return a clean message."""
@@ -57,20 +61,29 @@ def customize_resume(jd: str, resume_text: str) -> CustomizeResult:
 
     client = genai.Client(api_key=settings.gemini_api_key)
 
-    try:
-        response = client.models.generate_content(
-            model=settings.gemini_model,
-            contents=_build_user_prompt(jd, resume_text),
-            config=types.GenerateContentConfig(
-                system_instruction=SYSTEM_PROMPT,
-                response_mime_type="application/json",
-                temperature=0.4,
-            ),
-        )
-        raw = response.text
-    except Exception as exc:  # network, quota and safety blocks all end up here
-        logger.exception("Gemini request failed")
-        raise LLMError("The AI service is unavailable right now. Please try again in a moment.") from exc
+    raw = None
+    for attempt in range(1, MAX_ATTEMPTS + 1):
+        try:
+            response = client.models.generate_content(
+                model=settings.gemini_model,
+                contents=_build_user_prompt(jd, resume_text),
+                config=types.GenerateContentConfig(
+                    system_instruction=SYSTEM_PROMPT,
+                    response_mime_type="application/json",
+                    temperature=0.4,
+                ),
+            )
+            raw = response.text
+            break
+        except Exception as exc:  # network, quota and safety blocks all end up here
+            code = getattr(exc, "code", None)
+            if code in RETRYABLE_CODES and attempt < MAX_ATTEMPTS:
+                time.sleep(2 * attempt)
+                continue
+            logger.exception("Gemini request failed")
+            raise LLMError(
+                "The AI service is unavailable right now. Please try again in a moment."
+            ) from exc
 
     try:
         data = json.loads(raw)

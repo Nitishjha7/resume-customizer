@@ -12,7 +12,7 @@ Built for the Full Stack Developer assignment (Next.js + Python + LLM).
 |----------|-----------------------------------------|
 | Frontend | Next.js 14 (App Router), TypeScript, Tailwind CSS |
 | Backend  | Python, FastAPI                         |
-| LLM      | Google Gemini (`gemini-2.5-flash`) via the official `google-genai` SDK |
+| LLM      | Google Gemini (`gemini-3.8-flash`) via the official `google-genai` SDK |
 | Parsing  | `pdfplumber` (PDF), `python-docx` (DOCX) |
 | Hosting  | Google Cloud Run (both services, containerised) |
 
