@@ -11,7 +11,7 @@ experience bullets and a match score. The full tailored resume can be copied or 
 - Backend: Python, FastAPI
 - LLM: Google Gemini, `gemini-3.8-flash` by default (set `GEMINI_MODEL` to change), called through the `google-genai` SDK
 - Parsing: pdfplumber for PDF, python-docx for DOCX
-- Hosting: Docker images on Google Cloud Run
+- Hosting: backend on Google Cloud Run (Docker), frontend on Vercel
 
 ## How it works
 
@@ -84,20 +84,23 @@ docker compose up --build
 
 Tests: `pip install -r requirements-dev.txt && pytest` inside `backend/`.
 
-## Deploy (Cloud Run)
+## Deploy
+
+Backend on Cloud Run:
 
 ```bash
 cd backend
-gcloud run deploy resume-api --source . --region asia-south1 --allow-unauthenticated \
-  --set-env-vars GEMINI_API_KEY=YOUR_KEY,CORS_ORIGINS=https://YOUR_FRONTEND_URL
-
-cd ../frontend
-gcloud run deploy resume-web --source . --region asia-south1 --allow-unauthenticated \
-  --set-build-env-vars NEXT_PUBLIC_API_URL=https://YOUR_BACKEND_URL
+gcloud run deploy resume-api --source . --region asia-south1 --allow-unauthenticated --set-env-vars GEMINI_API_KEY=YOUR_KEY,CORS_ORIGINS=http://localhost:3000
 ```
 
-The frontend URL is only known after the second command, so set `CORS_ORIGINS` on the backend
-again afterwards (`gcloud run services update resume-api --update-env-vars CORS_ORIGINS=...`).
+Frontend on Vercel: import the repo, set the root directory to `frontend` and add
+`NEXT_PUBLIC_API_URL` = the Cloud Run URL (no trailing slash).
+
+Then point CORS at the Vercel URL:
+
+```bash
+gcloud run services update resume-api --region asia-south1 --update-env-vars CORS_ORIGINS=https://YOUR_APP.vercel.app
+```
 
 ## Error handling
 
